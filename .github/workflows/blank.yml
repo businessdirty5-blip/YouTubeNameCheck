@@ -1,0 +1,57 @@
+name: Check APK Project
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Get repository files
+        uses: actions/checkout@v4
+
+      - name: Read build configuration inside ZIP
+        shell: python
+        run: |
+          import zipfile
+          from pathlib import Path
+
+          archives = [
+              p for p in Path(".").rglob("*")
+              if p.is_file() and p.suffix.lower() == ".zip"
+              and ".git" not in p.parts
+          ]
+          if len(archives) != 1:
+              raise RuntimeError(
+                  "Expected one ZIP. Found: "
+                  + str([str(p) for p in archives])
+              )
+
+          with zipfile.ZipFile(archives[0]) as z:
+              print("ZIP:", archives[0])
+              print("
+PROJECT FILES:")
+              for name in z.namelist():
+                  print(name)
+
+              print("
+BUILD CONFIGURATION:")
+              for name in z.namelist():
+                  base = name.rsplit("/", 1)[-1]
+                  is_workflow = (
+                      ".github/workflows/" in name
+                      and name.endswith((".yml", ".yaml"))
+                  )
+                  if is_workflow or base in {
+                      "build.gradle.kts",
+                      "settings.gradle.kts",
+                      "gradle-wrapper.properties",
+                      "libs.versions.toml",
+                  }:
+                      print("
+--- " + name + " ---")
+                      print(z.read(name).decode("utf-8", errors="replace"))
